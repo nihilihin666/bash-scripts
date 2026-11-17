@@ -47,6 +47,7 @@ main requirements, not an exhaustive list of Linux utilities.
 | [other/dir-tree.sh](other/dir-tree.sh) | Recursively list a directory using find or tree. | Normal user. Console output; `--tree` can install missing tree using apt/dnf with sudo. |
 | [other/file-contents.sh](other/file-contents.sh) | Combine text files below a directory, skipping selected generated/binary content. | Normal user. Prints to stdout or writes the explicitly supplied output filename inside the input directory. |
 | [test-bash-scripts.sh](test-bash-scripts.sh) | Discover Bash syntax, ShellCheck, and ordinary Python unittest checks recursively. Requires Bash, Python 3, and ShellCheck. | Normal user; terminal results, no installation or persistent report. Runtime exclusions use `.test-runner-ignore` markers. |
+| [update-bash-scripts.sh](update-bash-scripts.sh) | Download the latest default-branch version of this repository over public HTTPS. Requires Git and network access. | Normal user; updates this directory, without a GitHub login. Plain folder copies are backed up under `$HOME/bash-scripts-output/repository-backups/` before replacement. |
 | [os/dd.sh](os/dd.sh) | Write an ISO to a selected removable/USB whole disk; uses GNU/Linux disk tools. | Real writes require root and destroy target data. `--dry-run` previews without unmounting or writing. |
 | [other/danger/erase-all-data.sh](other/danger/erase-all-data.sh) | Verified overwrite of eligible native ATA/SATA HDDs; other devices receive manual guidance. Uses embedded Python and storage tools. | Root for inventory/erasure; help needs no root. Destructive; separate qualification requirements below. No persistent reports in the home output directory. |
 
@@ -87,6 +88,50 @@ List a directory or print its combined text-file contents:
 ./bash-scripts/other/dir-tree.sh "$HOME/Projects"
 ./bash-scripts/other/file-contents.sh "$HOME/Projects/example"
 ```
+
+## Updating this repository
+
+Run as your normal user, without sudo:
+
+```bash
+./bash-scripts/update-bash-scripts.sh
+```
+
+This example assumes the parent directory of `bash-scripts`. The updater also
+works by absolute path from any working directory, and follows the location of
+the script rather than assuming the directory is named `bash-scripts`.
+
+Git and network access are required. The updater installs no software. It uses
+the fixed public HTTPS source `https://github.com/nihilihin666/bash-scripts.git`;
+no GitHub account, login, or SSH key is needed. An existing SSH-based `origin`
+is left unchanged. The published default branch is discovered automatically.
+
+- **Git checkout:** downloads and fast-forwards a clean checkout of the default
+  branch. Already-current copies report success. Local edits, staged or untracked
+  files, local commits, other branches, detached HEAD, and unfinished Git
+  operations cause refusal. Ignored files are retained, and collisions with
+  published files block replacement. There is no automatic stash, reset, rebase,
+  or conflict resolution. Keep your working copy and download a separate fresh
+  copy from GitHub if you want updates without resolving local Git changes.
+- **Folder copy or extracted ZIP without `.git`:** downloads a fresh checkout
+  first, copies the entire old folder to a unique backup under
+  `$HOME/bash-scripts-output/repository-backups/backup-*/repository`, then replaces
+  the folder. This includes local files absent from the published version; those
+  files remain in the backup rather than the updated folder. Future updates use
+  the new Git checkout. If your terminal was inside the old folder, use the
+  printed `cd` command to enter the replacement before continuing.
+  Backups are not deleted automatically. To restore one,
+  move the updated folder aside and copy the backup's `repository` directory back
+  to the original location.
+
+The parent directory must be writable. An empty `.<folder-name>.update-lock`
+directory beside the folder prevents overlapping updater runs. Normal exits and
+handled signals remove it; after a forced kill or power loss, remove it with
+`rmdir` only after confirming no updater is running. Folder replacement uses a
+temporary sibling directory; ordinary failures and handled interruptions attempt
+to restore the original folder. If restoration cannot complete, the error prints
+the retained recovery path. Keep the reported backup until you have checked the
+new copy. A forced kill or power loss can require restoring that backup manually.
 
 ## Outputs and recovery
 
