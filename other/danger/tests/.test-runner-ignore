@@ -1,0 +1,3 @@
+Erasure runtime tests require a separate disposable test machine or remote VM.
+See RELEASE-CHECKLIST.txt. This marker excludes this entire runtime-test subtree
+from test-bash-scripts.sh; it does not exclude Bash static checks.
