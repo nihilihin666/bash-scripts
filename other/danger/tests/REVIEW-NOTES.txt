@@ -1,0 +1,64 @@
+Swap compatibility and execution-gate review (2026-11-17)
+
+Implemented
+  Active swap is no longer a session-wide refusal. /proc/swaps is parsed using
+  the kernel's exact octal escaping, preserving literal backslashes and unusual
+  filenames. Every resolved physical swap backing is protected, including swap
+  files and zram writeback through the existing storage ancestry graph. Device
+  identity, not the spelling of /dev/zramN, selects zram handling.
+
+  Missing zram backing_dev on a verified kernel zram device no longer requires
+  /proc/config.gz: the driver compiles that attribute out without writeback.
+  Permission failures and unresolved backing still block writes. Neither swapoff
+  nor swap reconfiguration is performed. Session memory/tmpfs can reach swap;
+  no diagnostic report files are created.
+
+  Unmounted optional data entries in fstab no longer protect unrelated drives.
+  Configured system/boot filesystems, active system mounts, active swap, boot
+  media and script storage remain protected. --check no longer requires a tmpfs
+  working directory, because it creates no temporary working directory.
+
+  An absent udisks2 service can be masked without stopping a nonexistent unit.
+  Loaded services are still stopped, independent daemons still cause refusal,
+  and the existing cleanup restores owned masks and previously active services.
+
+  Worker monitoring now repeats the full target protection check periodically,
+  including changes to swap backing. Linux exclusive device claims, device
+  generation checks, exact-size overwrite and full verification remain required.
+
+  Refusals include offending swap records, source paths, command arguments,
+  command exit status/timeouts, malformed output, mount/firmware details,
+  changed identity fields, transfer counts, phase and target/kernel context.
+  Library debug environment variables are cleared to avoid corrupting tool output.
+
+Larger outstanding issues (not bypassed)
+  1. Fedora live-image backing resolution. Some live layouts expose deleted or
+     namespace-inaccessible loop backing files, e.g. /overlay (deleted) or
+     /LiveOS/rootfs.img. The current path-based resolver refuses these layouts.
+     Supporting them needs an inode/device-based loop backing resolver, including
+     evidence that deleted writable overlays are actually RAM-backed and that
+     all persistent image backing is protected. Identifying the boot USB alone
+     does not establish the complete backing graph. This can remain a blocker
+     after the two reported swap errors are fixed.
+
+  2. Boot topology. Installed legacy BIOS boot chains and UEFI CDROM/file-only
+     or chainloaded BootCurrent entries remain unsupported when actual loader
+     storage cannot be identified. Root and the EFI loader can use different
+     disks. Broader support needs a qualified resolver; removing the check can
+     expose a boot drive as an erase candidate.
+
+  3. Automatic erasure remains a native ATA/SATA HDD backend. USB bridges,
+     SSD/NVMe hardware erasure, non-systemd operation and unresolved ATA SANITIZE
+     state require separate qualified backends. These are larger scope changes.
+     SMART health/pending-sector vetoes also remain a conservative policy: they
+     can force manual handling of failing HDDs even though accessible-sector
+     overwrite may be possible. Changing that policy needs an explicit result
+     definition and failure/release qualification, not just deleting a check.
+
+  4. Runtime and physical qualification remain outstanding. This review ran
+     Bash/Python syntax and ShellCheck only. Authored regression cases are not
+     executed evidence. Run both suites only on a separate disposable test
+     machine/VM as required by RELEASE-CHECKLIST.txt, then qualify the exact
+     Fedora KDE image, USB creation method, firmware mode and sacrificial HDD.
+
+Primary references and the qualification matrix are in RELEASE-CHECKLIST.txt.

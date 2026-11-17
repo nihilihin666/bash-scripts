@@ -1,0 +1,141 @@
+erase-all-data.sh version-one release qualification
+
+Status: runtime and physical qualification remain pending for the current source.
+Syntax checks and static review are not release qualification. Tests authored in
+this directory have not been executed during this review. Earlier results for a
+different revision do not qualify the current script. Do not use the real batch
+as the qualification test.
+
+All runtime validation must run on a SEPARATE disposable test machine or remote
+VM. Never run these suites on the working computer, even in a locally hosted VM.
+The guest must have no host disks passed through. The suites accept no target
+device paths; real block tests use only loops allocated from private RAM images.
+Physical tests require a separate test machine and sacrificial drives whose data
+may be lost. Do not improvise destructive tests on a machine containing needed data.
+
+1. Source checks (no script execution or storage access)
+   - bash -n erase-all-data.sh
+   - shellcheck erase-all-data.sh
+   - Parse embedded Python and both test modules with Python ast.parse, without
+     importing the helper, launching the script or running a test case.
+
+2. Separate disposable VM
+   - Install the tools listed by the script, plus the relevant filesystem formatters.
+   - Run: python3 offline-validation.py --disposable-vm
+   - Run: sudo python3 vm-integration.py --disposable-vm
+   - Every supported filesystem case must pass; a missing-tool SKIP means that
+     filesystem remains unqualified in that environment. Resolve failures on
+     the test machine and rerun affected cases after changes.
+   - Include negative cases for protected drives, stale generation/partition
+     offsets, missing/duplicate identity, mounted filesystems, storage holders,
+     raw users, swap, limited bridges, external journals, dirty filesystems,
+     read/write failures, comparison mismatch, cancellation and no fallback.
+   - Confirm ext3 is mounted explicitly through the ext4 driver. Writable ext3
+     and ext4 mounts must retain journaling; read-only mounts must suppress replay.
+   - Confirm a second exclusive claimant fails during unmounted filesystem
+     checks, and that releasing this claim precedes mounting. An intervening
+     identity/usage/protection change must prevent file creation.
+   - Exercise the complete interactive script with disposable guest disks to
+     check confirmations and refusal behavior. The production script must keep
+     its virtual-device refusal: do not add an erasure eligibility override.
+
+3. Real boot layout and protection, on the separate physical test machine
+   - Use the exact planned live-image version, USB creation method and firmware
+     mode. Use --check first; it performs inventory/protection discovery only.
+   - Match printed identities against physical labels, not /dev names alone.
+   - Test script on boot USB, another USB and RAM. Boot USB must stay excluded.
+   - Test Fedora KDE live and installed sessions with RAM-only zram, zram without
+     writeback support, disk swap, encrypted/LVM swap, and swap files with spaces.
+     Swap must remain active, every physical backing drive must be excluded, and
+     an unrelated eligible SATA target must remain usable. Include malformed and
+     unreadable swap inventories: diagnostics must identify the entry or source
+     and writes must remain blocked. Recheck a newly activated swap target.
+   - Test installed UEFI Linux: root/system/script storage and EFI loader storage
+     must stay excluded even when they reside on different physical drives.
+   - Test a UEFI loader and live image on different drives: protect both drives.
+   - GPT/MBR partition-backed BootCurrent must resolve to exactly one inventoried
+     partition. Duplicate, missing or unsupported identities must block writes.
+   - ISO/CDROM-style, file-only chainloader and unknown BootCurrent layouts are
+     deliberately unsupported. Finding the live-image USB alone must never bypass
+     an unresolved UEFI loader. Installed BIOS chains without reliable boot
+     evidence are also unsupported. A refusal is not a failed safeguard.
+
+4. Sacrificial native SATA HDD
+   - Use an ordinary, positively identified libata HDD with no SANITIZE-state
+     uncertainty, hidden-capacity restriction or active storage holder.
+   - Create known nonzero contents across its accessible range and partitions
+     on the separate test machine; match drive label and all displayed identity.
+   - Run the complete interactive workflow, including both confirmations,
+     preparation, overwrite, flush, full read-back and session restoration.
+   - Independently check the entire accessible range after a successful result.
+     Required wording: All accessible sectors overwritten and verified.
+     No result may claim inaccessible/retired physical sectors were erased.
+   - Send Ctrl+C during overwrite, and separately during verification. Workers
+     must stop and be reaped; exit status must be 130; success must not appear.
+     Verification cancellation must say overwrite completed, verification
+     incomplete. Check desktop-service and suspend-inhibitor cleanup each time.
+   - Disconnect/reconnect a sacrificial device during selection/checking and
+     during operations. Refuse a changed generation/path; never resume. Keep
+     power failure and fault injection confined to sacrificial equipment.
+
+5. TXT saving on sacrificial targets
+   - Exercise each planned filesystem: NTFS, vfat, ext2, ext3, ext4 and exFAT.
+   - Check exact selected-target-only destination, complete text and read-back.
+   - Repeat with existing filename, malicious symlink/FIFO, full/read-only,
+     damaged/dirty/hibernated/encrypted filesystems, external journal and an
+     interrupted check/save. Never overwrite, repair, unlock or choose another
+     destination. On refusal/failure/interruption, print the complete text again.
+   - Verify no file/report/helper/cache is written to boot USB, another USB,
+     unrelated storage or a flash stick. A confirmed USB HDD/SSD may receive TXT;
+     an uncertain USB bridge or flash stick must not.
+   - Check competing mounts/claims during unmounted checks and handover. Claim
+     failure or stale identity must decline saving, without fallback.
+
+6. Release decision
+   - All required cases must pass on the final unchanged source and the planned
+     environment. Treat any unexpected success, wrong scope, surviving worker,
+     unrelated-drive write or unverified outcome as a release blocker.
+   - Keep evidence/notes in RAM during the session or record them externally by
+     hand; the script must not add persistent reports on unrelated drives.
+   - The hardware sanitization backend remains disabled. These tests do not
+     authorize SSD overwrite or an unimplemented hardware erase command.
+
+Actual version-one scope
+   Runtime capability/topology checks, no Fedora version restriction. Writing
+   requires working systemd/logind, successful udisks inhibition, trusted /run
+   tmpfs, resolved/protected swap backing, kernel diskseq and reliably protected boot/system/
+   script storage. Native libata ATA/SATA HDD overwrite additionally requires
+   supported direct I/O and positive rotation/capacity/identity evidence.
+   USB-connected HDD overwrite, non-systemd writing, unqualified controllers,
+   uncertain older HDDs and unresolved boot layouts are refused or manual-only.
+   TXT saving supports existing clean allowlisted filesystems only; ext3 uses
+   the ext4 driver. External journals and stored ext kernel mount-option strings
+   are declined. No filesystem repair, conversion, formatting or unlocking.
+
+References used to review the journal/driver change:
+   https://docs.kernel.org/admin-guide/ext4.html
+   https://raw.githubusercontent.com/tytso/e2fsprogs/master/lib/e2p/ls.c
+   https://raw.githubusercontent.com/tytso/e2fsprogs/master/misc/dumpe2fs.c
+   https://raw.githubusercontent.com/torvalds/linux/master/fs/ext4/super.c
+
+Swap compatibility and diagnostic qualification
+   - /proc/swaps kernel octal escapes must decode exactly once, including a
+     literal backslash followed by digits; malformed/deleted paths must refuse.
+   - An unmounted optional data disk listed in fstab remains selectable; system,
+     boot, active swap and script storage remain excluded.
+   - --check must work without a tmpfs working directory; interactive operations
+     still require trusted /run. It must not change swap, mounts or services.
+   - On a system without udisks2 installed, establish a temporary runtime mask
+     without attempting to stop a nonexistent unit; restore the mask on exit.
+     Test an active service too, and verify it restarts after cleanup.
+   - Capture command/exit status, mount/boot/swap entry, operation phase and
+     target identity in console errors. Do not create diagnostic report files.
+   - With disk-backed swap enabled, session memory and tmpfs may reach disk.
+     The script promises no report files, not absence of all persistent traces.
+
+References for swap compatibility review:
+   https://fedoraproject.org/wiki/Changes/SwapOnZRAM
+   https://raw.githubusercontent.com/torvalds/linux/master/mm/swapfile.c
+   https://raw.githubusercontent.com/torvalds/linux/master/drivers/block/zram/zram_drv.c
+   https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html
+   https://www.freedesktop.org/software/systemd/man/latest/systemctl.html
