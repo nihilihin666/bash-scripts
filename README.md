@@ -46,6 +46,7 @@ main requirements, not an exhaustive list of Linux utilities.
 | [t3code.sh](t3code.sh) | Install/update and launch an extracted Linux T3 Code AppImage. Can install missing helper tools on supported apt/dnf systems. | Normal user; dependency installation may need sudo. Uses `$HOME/.local/opt/t3code` and `$HOME/.local/bin/t3code`. Network needed for installation/update. |
 | [other/dir-tree.sh](other/dir-tree.sh) | Recursively list a directory using find or tree. | Normal user. Console output; `--tree` can install missing tree using apt/dnf with sudo. |
 | [other/file-contents.sh](other/file-contents.sh) | Combine text files below a directory, skipping selected generated/binary content. | Normal user. Prints to stdout or writes the explicitly supplied output filename inside the input directory. |
+| [test-bash-scripts.sh](test-bash-scripts.sh) | Discover Bash syntax, ShellCheck, and ordinary Python unittest checks recursively. Requires Bash, Python 3, and ShellCheck. | Normal user; terminal results, no installation or persistent report. Runtime exclusions use `.test-runner-ignore` markers. |
 | [os/dd.sh](os/dd.sh) | Write an ISO to a selected removable/USB whole disk; uses GNU/Linux disk tools. | Real writes require root and destroy target data. `--dry-run` previews without unmounting or writing. |
 | [other/danger/erase-all-data.sh](other/danger/erase-all-data.sh) | Verified overwrite of eligible native ATA/SATA HDDs; other devices receive manual guidance. Uses embedded Python and storage tools. | Root for inventory/erasure; help needs no root. Destructive; separate qualification requirements below. No persistent reports in the home output directory. |
 
@@ -163,8 +164,34 @@ qualification requires a separate test machine and sacrificial drives.
 
 ## Development and validation
 
-Run these commands from the repository root. Bash and ShellCheck perform static
-checks without running script operations:
+Run the automatic test runner as your normal user:
+
+```bash
+./bash-scripts/test-bash-scripts.sh
+```
+
+This example assumes the parent directory of `bash-scripts`; an absolute path
+works from any working directory. The runner locates the repository from its own
+path, checks every `.sh` file with `bash -n` and ShellCheck, and runs ordinary
+Python unittest files named `test_*.py` in every discovered directory. Add new
+test files using that naming convention; no directory list needs updating.
+Each directory runs in a separate Python process, and nested suites run once.
+Python caches are disabled. Requires Bash, Python 3, and ShellCheck; missing tools
+produce an error without installing anything.
+
+A `.test-runner-ignore` file excludes its directory and all descendants from
+runtime test discovery. Bash static checks still apply there. The erasure runtime
+test directory carries this marker. Keep tests requiring a separate machine or
+special setup in marked subtrees. The runner does not follow symlinks or traverse
+Git metadata, Python caches, or virtual environments containing `pyvenv.cfg`.
+
+The runner continues after ordinary failures, prints a summary, and exits with
+status 1 if any check fails or no test suites are found. Usage, missing-tool, and
+discovery errors return 2. Expected test skips do not cause failure. Results go
+to the terminal; no persistent report is written.
+
+For individual checks, run these commands from the repository root. Bash and
+ShellCheck perform static checks without running script operations:
 
 ```bash
 find . -type f -name '*.sh' -print0 |
@@ -184,7 +211,17 @@ python3 -m unittest discover -s os/fedora/tests -v
 python3 -m unittest discover -s os/fedora/setup/tests -v
 ```
 
-Run all three explicitly; root discovery does not cover every directory.
+When invoking unittest directly, run all three explicitly; root discovery does
+not cover every directory.
+
+The root suite includes disposable-file rename/restore and rollback tests,
+image validation/replacement tests, and mocked disk-write, launcher, SSH-agent,
+npm updater, and combined-file-output regressions. These do not install software,
+launch applications, or write to real devices. The npm root-refusal case skips
+when tests run as a normal user; do not elevate the suite just to run that case.
+Disk tests cover mocked orchestration and selected refusal paths, not actual
+block-device discovery, full storage topology, or hardware qualification.
+
 The root CLI suite invokes `--help` and `-h` for every `.sh` script, including
 the erasure script. Help must remain side-effect-free. Do not include the
 separate erasure runtime suites in ordinary local testing.
