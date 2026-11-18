@@ -55,7 +55,7 @@ Fedora-specific scripts:
 
 | Script | Purpose | Privileges and changes |
 | --- | --- | --- |
-| [os/fedora/fedora-update-all.sh](os/fedora/fedora-update-all.sh) | Update dnf packages, available Flatpak/Snap installations, and firmware through fwupdmgr; report restart requirements. | Root for real updates. Supports `--dry-run`; does not automatically reboot. |
+| [os/fedora/fedora-update-all.sh](os/fedora/fedora-update-all.sh) | Update dnf packages, available Flatpak/Snap installations, and firmware through fwupdmgr. | Root for real updates. Supports `--dry-run`. Use `--skip-reboot-check` to omit package and firmware restart checks. Some firmware updates require a full shutdown and power-on. The script never restarts the computer automatically. |
 | [os/fedora/setup/fedora-setup-01-base.sh](os/fedora/setup/fedora-setup-01-base.sh) | Install base packages, third-party repositories, applications, and shell tools. | Run through sudo from your normal account. Modifies system configuration and the invoking user's environment. Supports `--dry-run`. |
 | [os/fedora/setup/fedora-setup-02-kde-settings.sh](os/fedora/setup/fedora-setup-02-kde-settings.sh) | Configure Fedora KDE Plasma 6 Wayland preferences, with optional window/panel settings and Yakuake installation. | Logged-in desktop user, without sudo. Optional Yakuake installation uses sudo. Supports `--dry-run`. |
 | [os/fedora/setup/fedora-setup-02-xfce-settings.sh](os/fedora/setup/fedora-setup-02-xfce-settings.sh) | Configure XFCE preferences, keyboard/session behavior, and optional panel/background settings. | Logged-in desktop user with sudo available for system changes. Supports `--dry-run`; some keyboard behavior is X11-specific. |
