@@ -161,6 +161,17 @@ class FedoraUpdateTests(unittest.TestCase):
         indices = [calls.index(stage) for stage in stages]
         self.assertEqual(indices, sorted(indices))
 
+    def test_skip_reboot_check_preserves_updates_and_skips_both_checks(self):
+        _, default_calls = self.run_script()
+        output, calls = self.run_script(args="--yes --skip-reboot-check")
+        self.assertEqual(default_calls[-4:], ["dnf needs-restarting --help",
+                                             "dnf needs-restarting --reboothint",
+                                             "fwupdmgr --help", "fwupdmgr get-devices --json"])
+        self.assertEqual(calls, default_calls[:-4])
+        summary = output.split("==> Update summary", 1)[1]
+        self.assertIn("Package and firmware restart checks were skipped", summary)
+        self.assertNotIn("No reboot or shutdown is currently recommended", summary)
+
     def test_partial_failures_continue_and_are_counted(self):
         output, calls = self.run_script(
             "FLATPAK_UPDATE_RC=1\nSNAP_UPDATE_RC=1\nFW_UPDATE_RC=1", expected=1)
@@ -223,6 +234,15 @@ class FedoraUpdateTests(unittest.TestCase):
         self.assertIn("Firmware reboot check (exit 1)", output)
         self.assertIn("2 failed operation(s)", output)
         self.assertEqual(output.count("==> Update summary"), 1)
+
+    def test_skip_reboot_check_preserves_dnf_failure(self):
+        output, calls = self.run_script("DNF_RC=7", args="--skip-reboot-check --yes",
+                                        expected=1)
+        self.assertEqual(calls, ["lock", "dnf upgrade --refresh -y"])
+        self.assertIn("DNF package update (exit 7)", output)
+        self.assertIn("1 failed operation(s)", output)
+        self.assertIn("Package and firmware restart checks were skipped", output)
+        self.assertNotIn("restart checks were still attempted", output)
 
     def test_unexpected_exit_preserves_status_and_prints_one_summary(self):
         for body in ("return 7", "exit 7", "false"):
@@ -304,6 +324,13 @@ runuser() {
         self.assertEqual(calls, [])
         self.assertLess(output.index("query Snap updates"), output.index("query firmware updates last"))
         self.assertIn("without a reboot prompt", output)
+        self.assertIn("check package and firmware restart requirements", output)
+
+    def test_dry_run_reports_skipped_reboot_checks(self):
+        output, calls = self.run_script(args="--dry-run --skip-reboot-check")
+        self.assertEqual(calls, [])
+        self.assertIn("skip package and firmware restart checks (--skip-reboot-check)", output)
+        self.assertNotIn("check package and firmware restart requirements", output)
 
     def test_eof_never_accepts_default_yes(self):
         output, calls = self.run_script(args="")
@@ -453,6 +480,15 @@ runuser() {
         self.assertIn("absolute", output)
         self.assertIn("non-root user invoking sudo", output)
         self.assertEqual(calls, [])
+
+    def test_help_documents_skip_reboot_check_without_running_commands(self):
+        for option in ("--help", "-h"):
+            with self.subTest(option=option):
+                output, calls = self.run_script(args=option)
+                self.assertEqual(calls, [])
+                self.assertIn("[--skip-reboot-check]", output)
+                self.assertIn("Skip package and firmware restart checks.", output)
+                self.assertIn("full shutdown", output)
 
     def test_custom_flatpak_path_rejects_invalid_arguments_before_updates(self):
         for args in ("--user-flatpak-dir", "--user-flatpak-dir ''",

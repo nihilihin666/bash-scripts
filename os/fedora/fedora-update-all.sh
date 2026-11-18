@@ -12,6 +12,7 @@ set -euo pipefail
 
 DRY_RUN=0
 ASSUME_YES=0
+SKIP_REBOOT_CHECK=0
 USER_FLATPAK_DIR=""
 LOCK_FILE="/run/lock/fedora-update-all.lock"
 FAILED_OPERATIONS=()
@@ -26,11 +27,14 @@ usage() {
   cat <<HELP
 Update Fedora packages, Flatpak and Snap apps, and firmware; report restart needs.
 
-Usage: $0 [--dry-run] [--yes] [--user-flatpak-dir PATH]
+Usage: $0 [--dry-run] [--yes] [--skip-reboot-check] [--user-flatpak-dir PATH]
 
 Options:
   --dry-run                Show the update plan without running updates.
   -y, --yes                Accept installation prompts.
+  --skip-reboot-check      Skip package and firmware restart checks.
+                           Some firmware updates require a full shutdown and
+                           power-on. Follow the device-specific instructions.
   --user-flatpak-dir PATH  Use an absolute personal Flatpak installation path
                            for the non-root user invoking sudo. Requires sudo;
                            applies only to that user's Flatpak commands.
@@ -53,6 +57,7 @@ parse_args() {
     case "$arg" in
       --dry-run) DRY_RUN=1 ;;
       -y|--yes) ASSUME_YES=1 ;;
+      --skip-reboot-check) SKIP_REBOOT_CHECK=1 ;;
       --user-flatpak-dir)
         [[ "$#" -ge 2 ]] || die "--user-flatpak-dir requires an absolute path."
         USER_FLATPAK_DIR="$2"
@@ -148,7 +153,11 @@ print_summary() {
   local stopped="${1:-0}"
   log "Update summary"
   if [[ "$stopped" -eq 1 ]]; then
-    echo "Update run stopped after DNF failed; later stages were not attempted (restart checks were still attempted)."
+    if [[ "$SKIP_REBOOT_CHECK" -eq 1 ]]; then
+      echo "Update run stopped after DNF failed; later update stages were not attempted."
+    else
+      echo "Update run stopped after DNF failed; later stages were not attempted (restart checks were still attempted)."
+    fi
   fi
   if [[ "${#FAILED_OPERATIONS[@]}" -gt 0 ]]; then
     printf 'Update run had %s failed operation(s):\n' "${#FAILED_OPERATIONS[@]}"
@@ -406,6 +415,11 @@ except (ValueError, KeyError, TypeError) as error:
 }
 
 check_restart_requirements() {
+  if [[ "$SKIP_REBOOT_CHECK" -eq 1 ]]; then
+    REBOOT_MESSAGE="Package and firmware restart checks were skipped (--skip-reboot-check)."
+    return
+  fi
+
   log "Checking package and firmware restart requirements"
   local dnf_state=unknown firmware_state=unknown rc=0 output help_output
   if dnf needs-restarting --help >/dev/null 2>&1; then
@@ -491,7 +505,11 @@ main() {
   require_root_unless_dry_run
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    cat <<'PLAN'
+    local restart_plan="check package and firmware restart requirements without restarting"
+    if [[ "$SKIP_REBOOT_CHECK" -eq 1 ]]; then
+      restart_plan="skip package and firmware restart checks (--skip-reboot-check)"
+    fi
+    cat <<PLAN
 Fedora update dry-run; no update commands will be executed.
 
 Would perform:
@@ -500,7 +518,7 @@ Would perform:
   - when run through sudo, query that user's Flatpak updates separately
   - query Snap updates and ask before applying them
   - query firmware updates last and ask before applying them, without a reboot prompt
-  - check package and firmware restart requirements without restarting
+  - $restart_plan
   - summarize failures and declined updates; return nonzero if any operation failed
 The script's installation prompts are accepted when --yes is supplied.
 PLAN
